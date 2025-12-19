@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>单词地下城：移动适配版</title>
+    <title>单词地下城：GitHub部署版</title>
     <style>
         :root {
             --bg: #050505; --card: #141414; 
@@ -26,7 +26,9 @@
         .btn-start { background: linear-gradient(135deg, #d946ef, #a855f7); box-shadow: 0 4px 20px rgba(217, 70, 239, 0.3); }
         .btn-gacha { background: linear-gradient(135deg, #eab308, #ca8a04); color: #000; }
         .btn-soul { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+        .btn-wrong { background: linear-gradient(135deg, #f43f5e, #e11d48); }
         .btn-outline { background: transparent; border: 2px solid #3f3f46; color: #a1a1aa; }
+        .btn-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
 
         /* 职业卡片 */
         .job-grid { display: grid; gap: 12px; margin: 20px 0; }
@@ -61,6 +63,14 @@
         .opt-btn.correct { background: #22c55e; color: #000; border-color: #4ade80; }
         .opt-btn.wrong { background: #e11d48; color: #fff; border-color: #fb7185; animation: shake 0.3s; opacity: 0.6; }
 
+        /* 列表样式 (错题本 & 词库预览) */
+        .list-container { overflow-y: auto; flex: 1; margin: 10px 0; }
+        .list-item { background: #27272a; padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #3f3f46; }
+        .mistake-item { border-left: 3px solid #f43f5e; }
+        .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .badge-err { background: #f43f5e; color: #fff; }
+        .badge-info { background: #3f3f46; color: #a1a1aa; }
+
         /* 抽卡/天赋 */
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 15px 0; max-height: 30vh; overflow-y: auto; }
         .item-box { background: #27272a; padding: 8px; border-radius: 10px; text-align: center; border: 1px solid #3f3f46; font-size: 12px; }
@@ -85,10 +95,10 @@
 
 <div id="app">
     <div id="screen-home" class="screen">
-        <div style="text-align: center; margin-top: 40px; margin-bottom: 30px;">
+        <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
             <div style="font-size: 50px; margin-bottom: 10px;">📱</div>
             <h1 style="font-size: 32px; font-weight: 900; background: linear-gradient(to right, #d946ef, #f43f5e); -webkit-background-clip: text; color: transparent;">单词地下城</h1>
-            <p style="color: #71717a; font-size: 12px; letter-spacing: 2px;">MOBILE EDITION</p>
+            <p style="color: #71717a; font-size: 12px; letter-spacing: 2px;">GITHUB EDITION</p>
         </div>
 
         <div style="background: #27272a; padding: 15px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #3f3f46; display: flex; justify-content: space-between; align-items: center;">
@@ -97,8 +107,39 @@
         </div>
 
         <button class="btn-start" onclick="UI.switch('screen-job')">⚔️ 开始冒险</button>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-outline" style="flex:1" onclick="DictSys.openSourceModal()">📂 词库管理</button>
+            <button class="btn-outline" style="flex:1" onclick="DictSys.openViewer()">📖 查看词库</button>
+        </div>
+        <button class="btn-wrong" onclick="DictSys.openMistakes()">💀 错题挑战 <span id="wrong-count-badge" style="background:rgba(0,0,0,0.3); font-size:10px; padding:2px 6px; border-radius:4px">0</span></button>
         <button class="btn-soul" onclick="TalentSys.open()">🔮 灵魂天赋</button>
-        <button class="btn-outline" onclick="DictSys.open()">📚 导入词库</button>
+    </div>
+
+    <div id="screen-dict-view" class="screen hidden">
+        <div class="hud-top">
+            <div style="color:#e4e4e7">📖 当前词库: <span id="view-source-name" style="color:var(--primary)">默认</span></div>
+            <div onclick="UI.switch('screen-home')" style="cursor:pointer">❌</div>
+        </div>
+        <div class="list-container" id="dict-view-container">
+            </div>
+        <div style="text-align:center; color:#52525b; font-size:12px; padding:10px;">
+            共 <span id="view-total-count">0</span> 个单词
+        </div>
+    </div>
+
+    <div id="screen-mistakes" class="screen hidden">
+        <div class="hud-top">
+            <div style="color:#e4e4e7">💀 错题本</div>
+            <div onclick="UI.switch('screen-home')" style="cursor:pointer">❌</div>
+        </div>
+        
+        <div style="display:flex; gap:10px;">
+            <button class="btn-start" style="flex:2" onclick="Game.startRun('review', 'normal')">🔥 挑战错题</button>
+            <button class="btn-outline" style="flex:1" onclick="DictSys.clearMistakes()">清空</button>
+        </div>
+        
+        <div class="list-container" id="mistake-container">
+            </div>
     </div>
 
     <div id="screen-job" class="screen hidden">
@@ -190,17 +231,32 @@
     <div id="modal-diff" class="modal">
         <div class="modal-box">
             <h2 style="margin-bottom:15px">选择难度</h2>
-            <button class="diff-btn" onclick="Game.startRun('easy')" style="border-color:#4ade80; color:#4ade80">
+            <button class="diff-btn" onclick="Game.startRun('normal', 'easy')" style="border-color:#4ade80; color:#4ade80">
                 🟢 见习冒险家
                 <small>15秒思考 | 收益 x1.0</small>
             </button>
-            <button class="diff-btn" onclick="Game.startRun('normal')" style="border-color:#eab308; color:#eab308">
+            <button class="diff-btn" onclick="Game.startRun('normal', 'normal')" style="border-color:#eab308; color:#eab308">
                 🟡 荣耀勇者
                 <small>10秒思考 | 收益 x1.5</small>
             </button>
-            <button class="diff-btn" onclick="Game.startRun('hard')" style="border-color:#f43f5e; color:#f43f5e">
+            <button class="diff-btn" onclick="Game.startRun('normal', 'hard')" style="border-color:#f43f5e; color:#f43f5e">
                 🔴 深渊梦魇
                 <small>🔥5秒思考 | 收益 x3.0</small>
+            </button>
+            <button class="btn-outline" style="margin-top:10px" onclick="UI.closeModals()">取消</button>
+        </div>
+    </div>
+
+    <div id="modal-source" class="modal">
+        <div class="modal-box">
+            <h2 style="margin-bottom:15px">选择词库来源</h2>
+            <button class="diff-btn" onclick="DictSys.loadBuiltIn()" style="border-color:var(--primary);">
+                🌐 内置词库 (GitHub)
+                <small>考研高频词汇精选 (推荐)</small>
+            </button>
+            <button class="diff-btn" onclick="document.getElementById('file-input').click()" style="border-color:var(--gold);">
+                📂 导入本地文件
+                <small>支持 txt/csv 格式</small>
             </button>
             <button class="btn-outline" style="margin-top:10px" onclick="UI.closeModals()">取消</button>
         </div>
@@ -210,7 +266,7 @@
         <div class="modal-box">
             <h2 style="font-size:32px; margin-bottom:10px; color:#f43f5e">YOU DIED</h2>
             <div id="res-content" style="color:#a1a1aa; margin:20px 0; line-height:1.6"></div>
-            <button class="btn-start" onclick="location.reload()">再来一局</button>
+            <button class="btn-start" onclick="location.reload()">返回主页</button>
         </div>
     </div>
 
@@ -218,11 +274,9 @@
 </div>
 
 <script>
-/** 🔊 音频系统 (手机端修复版) */
+/** 🔊 音频系统 */
 const AudioSys = {
     ctx: null,
-    
-    // 初始化音频上下文 (需在用户交互时调用)
     warmup() {
         if (!this.ctx) {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -230,20 +284,16 @@ const AudioSys = {
         if (this.ctx.state === 'suspended') {
             this.ctx.resume();
         }
-        // 播放静音解锁 AudioContext
         const o = this.ctx.createOscillator();
         const g = this.ctx.createGain();
         g.gain.value = 0;
         o.connect(g); g.connect(this.ctx.destination);
         o.start(); o.stop(this.ctx.currentTime + 0.1);
-
-        // 播放静音解锁 SpeechSynthesis (关键!)
         if(window.speechSynthesis) {
             const u = new SpeechSynthesisUtterance('');
             window.speechSynthesis.speak(u);
         }
     },
-
     playTone(type, f, d, v=0.1) {
         if (!this.ctx) return;
         const o = this.ctx.createOscillator(), g = this.ctx.createGain();
@@ -258,26 +308,16 @@ const AudioSys = {
     hit() { this.playTone('sawtooth', 100, 0.3); },
     coin() { this.playTone('sine', 1500, 0.1); },
     skill() { this.playTone('sine', 800, 0.3); setTimeout(()=>this.playTone('square', 1200, 0.3), 100); },
-    
-    // 朗读逻辑 (真人优先 -> 系统降级)
     speak(force = false) {
         if(!Game.curWord) return;
-        
-        // 1. 尝试在线真人发音 (有道API)
-        // 注意：移动端 Audio 需要用户交互解锁，我们在 warmup 中解锁了
         const audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${Game.curWord.en}&type=2`);
-        
         const playPromise = audio.play();
-        
         if (playPromise !== undefined) {
             playPromise.catch(error => {
-                // 2. 如果在线发音失败，降级使用手机 TTS
-                console.log("Audio play failed, fallback to TTS");
                 this.speakTTS();
             });
         }
     },
-
     speakTTS() {
         if(!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
@@ -290,7 +330,7 @@ const AudioSys = {
 
 /** ⚔️ 游戏核心 */
 const Game = {
-    state: { job:'warrior', hp:0, maxHp:0, gold:0, floor:1, combo:0, diff:'normal', skillCd:0 },
+    state: { job:'warrior', hp:0, maxHp:0, gold:0, floor:1, combo:0, diff:'normal', skillCd:0, mode:'normal' },
     diffConfig: {
         easy:   { time:15, multi:1.0, name:'见习' },
         normal: { time:10, multi:1.5, name:'勇者' },
@@ -303,28 +343,37 @@ const Game = {
     },
     battle: { timer:null, maxTime:10, curTime:10, enemyHp:1, maxEnemyHp:1, elite:false, skillActive:false },
     curWord: null,
+    currentPool: [], 
 
     init() {
         DictSys.init();
         TalentSys.init();
         document.getElementById('home-soul').innerText = TalentSys.soul;
-        
-        // 绑定首次点击，预热音频引擎
         document.addEventListener('click', () => {
             AudioSys.warmup();
         }, { once: true });
     },
 
     selectJob(job) {
-        AudioSys.warmup(); // 再次确保预热
+        AudioSys.warmup();
         this.state.job = job;
         document.querySelectorAll('.job-card').forEach(el => el.classList.remove('selected'));
         document.getElementById('job-'+job).classList.add('selected');
         setTimeout(() => UI.showDiffModal(), 200);
     },
 
-    startRun(diff) {
-        if(DictSys.list.length < 5) return alert("请先导入词库！");
+    startRun(mode, diff) {
+        if(mode === 'normal' && DictSys.list.length < 5) return alert("请先导入词库！");
+        if(mode === 'review' && DictSys.mistakes.length === 0) return alert("暂无错题！");
+        if(mode === 'review') {
+            diff = 'normal';
+            this.currentPool = DictSys.mistakes; 
+            this.state.job = 'warrior'; 
+        } else {
+            this.currentPool = DictSys.list; 
+        }
+
+        this.state.mode = mode;
         this.state.diff = diff;
         
         const jobBase = this.jobs[this.state.job].hp;
@@ -362,14 +411,19 @@ const Game = {
     nextQ() {
         if(this.battle.enemyHp <= 0) return this.win();
 
-        const list = DictSys.list;
-        this.curWord = list[Math.floor(Math.random()*list.length)];
+        const pool = this.currentPool;
+        this.curWord = pool[Math.floor(Math.random()*pool.length)];
+        
+        const mainList = DictSys.list.length > 0 ? DictSys.list : pool;
         const opts = new Set([this.curWord.zh]);
-        while(opts.size < 4) opts.add(list[Math.floor(Math.random()*list.length)].zh);
+        
+        let safeCounter = 0;
+        while(opts.size < 4 && safeCounter < 100) {
+            opts.add(mainList[Math.floor(Math.random()*mainList.length)].zh);
+            safeCounter++;
+        }
         
         document.getElementById('q-word').innerText = this.curWord.en;
-        
-        // 延迟一点播放，防止换页卡顿
         setTimeout(() => AudioSys.speak(), 100);
         
         const box = document.getElementById('opt-container');
@@ -482,6 +536,7 @@ const Game = {
             setTimeout(() => this.nextQ(), 400);
         } else {
             btn.classList.add('wrong');
+            DictSys.addMistake(this.curWord);
             this.state.combo = 0;
             this.takeDmg();
             document.querySelectorAll('.opt-btn').forEach(b=>{
@@ -526,7 +581,10 @@ const Game = {
         let soul = Math.floor(this.state.floor * 10 * this.diffConfig[this.state.diff].multi);
         TalentSys.addSoul(soul);
         
+        let title = this.state.mode === 'review' ? '复习结束' : 'YOU DIED';
+
         document.getElementById('res-content').innerHTML = `
+            <h2 style="color:#f43f5e; font-size:24px; margin-bottom:10px">${title}</h2>
             <p>职业: ${this.jobs[this.state.job].name}</p>
             <p>止步层数: <b style="color:#f43f5e">${this.state.floor}</b></p>
             <p>获得灵魂: <b style="color:var(--soul)">+${soul}</b></p>
@@ -615,16 +673,54 @@ const TalentSys = {
 /** 📚 词库系统 */
 const DictSys = {
     list: [],
+    mistakes: [],
+    sourceName: "未加载", // 当前词库来源名称
+    
+    // 内置词库 (模拟GitHub远程库)
+    builtInRaw: "abandon|放弃;absolute|绝对的;academic|学术的;accelerate|加速;accent|口音;access|入口;accommodate|容纳;accumulate|积累;acknowledge|承认;acquire|获得;adapt|适应;addict|上瘾;adequate|足够的;adjust|调整;admire|钦佩;admit|承认;adopt|收养;adult|成年人;advance|前进;adventure|冒险;advocate|提倡;affect|影响;affection|喜爱;agency|代理处;agent|代理人;aggressive|侵略的;agony|痛苦;agriculture|农业;aid|援助;alarm|警报;alien|外星人;allowance|津贴;alongside|在旁边;alter|改变;alternative|替代物;amaze|使吃惊;ambition|野心;ambulance|救护车;amount|数量;amuse|娱乐;analyze|分析;ancestor|祖先;anchor|锚;ancient|古代的;anger|愤怒;angle|角度;anniversary|周年纪念;announce|宣布;annoy|使烦恼;annual|每年的",
+
     init() {
-        const raw = "abandon|放弃;ability|能力;absolute|绝对的;academic|学术的;accelerate|加速;accent|口音;access|入口;accident|事故;account|账户;achieve|实现";
-        this.parse(raw);
         const saved = localStorage.getItem('abyss_dict');
-        if(saved) this.list = JSON.parse(saved);
+        const savedName = localStorage.getItem('abyss_dict_name');
+        
+        if(saved && savedName) {
+            this.list = JSON.parse(saved);
+            this.sourceName = savedName;
+        } else {
+            // 默认加载内置
+            this.loadBuiltIn(true);
+        }
+
+        const savedMis = localStorage.getItem('abyss_mistakes');
+        if(savedMis) this.mistakes = JSON.parse(savedMis);
+        this.updateBadge();
     },
+    
+    // 打开来源选择框
+    openSourceModal() {
+        document.getElementById('modal-source').classList.add('show');
+    },
+
+    // 加载内置词库
+    loadBuiltIn(silent = false) {
+        this.parse(this.builtInRaw);
+        this.sourceName = "内置词库 (GitHub)";
+        this.save("内置词库 (GitHub)");
+        if(!silent) {
+            alert("已切换至：内置词库 (GitHub)");
+            UI.closeModals();
+        }
+    },
+    
     parse(str) {
         this.list = str.split(';').map(s=>{const p=s.split('|');return{en:p[0],zh:p[1]}}).filter(w=>w.en);
     },
-    open() { document.getElementById('file-input').click(); },
+    
+    save(name) {
+        localStorage.setItem('abyss_dict', JSON.stringify(this.list));
+        localStorage.setItem('abyss_dict_name', name);
+    },
+    
     handleFile(inp) {
         const f = inp.files[0];
         const r = new FileReader();
@@ -636,11 +732,87 @@ const DictSys = {
             });
             if(arr.length>0) {
                 this.list = arr;
-                localStorage.setItem('abyss_dict', JSON.stringify(arr));
-                alert(`导入 ${arr.length} 词成功!`);
+                this.sourceName = "本地文件: " + f.name;
+                this.save(this.sourceName);
+                alert(`成功导入 ${arr.length} 个单词！`);
+                UI.closeModals();
             }
         };
         r.readAsText(f);
+        inp.value = ''; // 重置input
+    },
+
+    // 📖 查看词库 (新功能)
+    openViewer() {
+        UI.switch('screen-dict-view');
+        const con = document.getElementById('dict-view-container');
+        document.getElementById('view-source-name').innerText = this.sourceName;
+        document.getElementById('view-total-count').innerText = this.list.length;
+        con.innerHTML = '';
+        
+        if(this.list.length === 0) {
+            con.innerHTML = '<div style="text-align:center;color:#71717a;margin-top:20px">词库为空，请先导入！</div>';
+            return;
+        }
+
+        // 仅渲染前200个防止卡顿，或者简单渲染全部
+        this.list.forEach((w, i) => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `
+                <div style="font-weight:bold; color:#fff">${i+1}. ${w.en}</div>
+                <div style="color:#a1a1aa; font-size:14px">${w.zh}</div>
+            `;
+            con.appendChild(item);
+        });
+    },
+
+    addMistake(word) {
+        const idx = this.mistakes.findIndex(m => m.en === word.en);
+        if(idx >= 0) {
+            this.mistakes[idx].count++;
+        } else {
+            this.mistakes.push({...word, count: 1});
+        }
+        localStorage.setItem('abyss_mistakes', JSON.stringify(this.mistakes));
+        this.updateBadge();
+    },
+
+    updateBadge() {
+        document.getElementById('wrong-count-badge').innerText = this.mistakes.length;
+    },
+
+    openMistakes() {
+        UI.switch('screen-mistakes');
+        const con = document.getElementById('mistake-container');
+        con.innerHTML = '';
+        if(this.mistakes.length === 0) {
+            con.innerHTML = '<div style="text-align:center;color:#71717a;margin-top:20px">暂无错题，快去冒险吧！</div>';
+            return;
+        }
+        
+        const sorted = [...this.mistakes].sort((a,b) => b.count - a.count);
+        
+        sorted.forEach(m => {
+            const item = document.createElement('div');
+            item.className = 'list-item mistake-item';
+            item.innerHTML = `
+                <div>
+                    <div style="font-weight:bold; color:#fff">${m.en}</div>
+                    <div style="font-size:12px; color:#a1a1aa">${m.zh}</div>
+                </div>
+                <div class="badge badge-err">错误 ${m.count}</div>
+            `;
+            con.appendChild(item);
+        });
+    },
+
+    clearMistakes() {
+        if(!confirm("确定清空所有错题记录吗？")) return;
+        this.mistakes = [];
+        localStorage.setItem('abyss_mistakes', JSON.stringify([]));
+        this.updateBadge();
+        this.openMistakes();
     }
 };
 
