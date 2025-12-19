@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>单词地下城：移动适配版</title>
+    <style>
+        :root {
+            --bg: #050505; --card: #141414; 
+            --primary: #d946ef; --accent: #f43f5e;
+            --gold: #eab308; --soul: #8b5cf6; --crit: #ff0055;
+            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { font-family: var(--font); background: var(--bg); color: #e4e4e7; height: 100vh; overflow: hidden; display: flex; justify-content: center; }
+        
+        #app { width: 100%; max-width: 480px; height: 100%; background: var(--card); position: relative; display: flex; flex-direction: column; box-shadow: 0 0 50px rgba(217, 70, 239, 0.15); }
+
+        /* 通用 */
+        .screen { position: absolute; inset: 0; padding: 20px; display: flex; flex-direction: column; background: var(--card); z-index: 10; transition: opacity 0.3s; overflow-y: auto; }
+        .hidden { opacity: 0; pointer-events: none; z-index: 0; display: none !important; }
+        
+        button { border: none; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 16px; margin: 8px 0; cursor: pointer; transition: 0.1s; width: 100%; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; gap: 8px; color: #fff; }
+        button:active { transform: scale(0.96); }
+        
+        .btn-start { background: linear-gradient(135deg, #d946ef, #a855f7); box-shadow: 0 4px 20px rgba(217, 70, 239, 0.3); }
+        .btn-gacha { background: linear-gradient(135deg, #eab308, #ca8a04); color: #000; }
+        .btn-soul { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+        .btn-outline { background: transparent; border: 2px solid #3f3f46; color: #a1a1aa; }
+
+        /* 职业卡片 */
+        .job-grid { display: grid; gap: 12px; margin: 20px 0; }
+        .job-card { background: #27272a; padding: 15px; border-radius: 16px; border: 2px solid transparent; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 15px; }
+        .job-card:active { transform: scale(0.98); }
+        .job-card.selected { border-color: var(--primary); background: rgba(217, 70, 239, 0.1); }
+        .job-icon { font-size: 32px; background: #18181b; padding: 10px; border-radius: 12px; }
+        
+        /* 战斗HUD */
+        .hud-top { display: flex; justify-content: space-between; background: #27272a; padding: 10px 15px; border-radius: 16px; margin-bottom: 15px; border: 1px solid #3f3f46; font-weight: bold; font-size: 14px; }
+        
+        /* 技能按钮 */
+        .skill-btn { background: #3f3f46; color: #fff; padding: 12px; border-radius: 12px; text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 15px; border: 1px solid #52525b; position: relative; overflow: hidden; cursor: pointer; transition: 0.2s; }
+        .skill-btn.ready { background: linear-gradient(135deg, #06b6d4, #3b82f6); border-color: #67e8f9; box-shadow: 0 0 15px rgba(6, 182, 212, 0.4); animation: pulse 2s infinite; }
+        .skill-cooldown { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; font-size: 18px; color: #a1a1aa; }
+
+        /* 怪物区 */
+        .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        .enemy-box { text-align: center; position: relative; z-index: 2; transition: 0.3s; }
+        .enemy-icon { font-size: 80px; filter: drop-shadow(0 0 20px rgba(244, 63, 94, 0.3)); animation: float 3s ease-in-out infinite; }
+        .elite-glow .enemy-icon { filter: drop-shadow(0 0 30px rgba(234, 179, 8, 0.8)); transform: scale(1.2); }
+        .dmg-num { position: absolute; color: #fff; font-size: 40px; font-weight: 900; animation: floatUp 0.6s forwards; text-shadow: 2px 2px 0 #000; pointer-events: none; z-index: 20; }
+
+        /* 单词与选项 */
+        .word-card { background: #18181b; padding: 20px; border-radius: 20px; text-align: center; margin-bottom: 15px; position: relative; border: 1px solid #3f3f46; }
+        .word-text { font-size: 28px; font-weight: 900; color: #fff; margin-bottom: 15px; }
+        .timer-track { height: 6px; background: #3f3f46; border-radius: 3px; overflow: hidden; }
+        .timer-fill { height: 100%; background: #4ade80; width: 100%; transition: width 0.1s linear; }
+        .opt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .opt-btn { background: #27272a; color: #d4d4d8; padding: 15px; border-radius: 12px; font-size: 15px; font-weight: 600; text-align: center; border: 2px solid transparent; transition: 0.1s; }
+        .opt-btn:active { background: #3f3f46; }
+        .opt-btn.correct { background: #22c55e; color: #000; border-color: #4ade80; }
+        .opt-btn.wrong { background: #e11d48; color: #fff; border-color: #fb7185; animation: shake 0.3s; opacity: 0.6; }
+
+        /* 抽卡/天赋 */
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 15px 0; max-height: 30vh; overflow-y: auto; }
+        .item-box { background: #27272a; padding: 8px; border-radius: 10px; text-align: center; border: 1px solid #3f3f46; font-size: 12px; }
+        .item-box.ssr { border-color: var(--gold); box-shadow: inset 0 0 10px rgba(234, 179, 8, 0.2); }
+        .talent-row { display: flex; justify-content: space-between; align-items: center; background: #27272a; padding: 15px; border-radius: 12px; margin-bottom: 10px; }
+
+        /* 动画与模态框 */
+        @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-10px); } }
+        @keyframes floatUp { 0% { opacity:1; transform:translate(-50%,-50%) scale(0.5); } 100% { opacity:0; transform:translate(-50%,-150%) scale(1.2); } }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: 0.3s; backdrop-filter: blur(5px); }
+        .modal.show { opacity: 1; pointer-events: all; }
+        .modal-box { background: #18181b; padding: 25px; border-radius: 24px; text-align: center; width: 85%; border: 1px solid #3f3f46; max-width: 380px; }
+        .diff-btn { text-align: left; padding: 15px; margin: 8px 0; border: 2px solid transparent; border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; cursor: pointer; width: 100%; transition: 0.1s; }
+        .diff-btn:hover { background: rgba(255,255,255,0.1); }
+        .diff-btn small { display: block; opacity: 0.6; font-size: 12px; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="screen-home" class="screen">
+        <div style="text-align: center; margin-top: 40px; margin-bottom: 30px;">
+            <div style="font-size: 50px; margin-bottom: 10px;">📱</div>
+            <h1 style="font-size: 32px; font-weight: 900; background: linear-gradient(to right, #d946ef, #f43f5e); -webkit-background-clip: text; color: transparent;">单词地下城</h1>
+            <p style="color: #71717a; font-size: 12px; letter-spacing: 2px;">MOBILE EDITION</p>
+        </div>
+
+        <div style="background: #27272a; padding: 15px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #3f3f46; display: flex; justify-content: space-between; align-items: center;">
+            <span style="color:#a1a1aa">🟣 灵魂碎片</span>
+            <span style="color:var(--soul); font-weight:900; font-size:20px" id="home-soul">0</span>
+        </div>
+
+        <button class="btn-start" onclick="UI.switch('screen-job')">⚔️ 开始冒险</button>
+        <button class="btn-soul" onclick="TalentSys.open()">🔮 灵魂天赋</button>
+        <button class="btn-outline" onclick="DictSys.open()">📚 导入词库</button>
+    </div>
+
+    <div id="screen-job" class="screen hidden">
+        <h2 style="text-align: center; margin-bottom: 20px;">选择你的英雄</h2>
+        
+        <div class="job-grid">
+            <div class="job-card" onclick="Game.selectJob('warrior')" id="job-warrior">
+                <div class="job-icon">🩸</div>
+                <div>
+                    <div style="font-weight:bold; font-size:18px;">狂战士</div>
+                    <div style="font-size:12px; color:#a1a1aa; margin-top:5px;">血量: 5 | 技能: 血怒<br>下一次攻击必暴击且回血</div>
+                </div>
+            </div>
+            <div class="job-card" onclick="Game.selectJob('mage')" id="job-mage">
+                <div class="job-icon">🔮</div>
+                <div>
+                    <div style="font-weight:bold; font-size:18px;">时空法师</div>
+                    <div style="font-size:12px; color:#a1a1aa; margin-top:5px;">血量: 3 | 技能: 凝滞<br>暂停倒计时 5 秒</div>
+                </div>
+            </div>
+            <div class="job-card" onclick="Game.selectJob('rogue')" id="job-rogue">
+                <div class="job-icon">🗡️</div>
+                <div>
+                    <div style="font-weight:bold; font-size:18px;">赏金猎人</div>
+                    <div style="font-size:12px; color:#a1a1aa; margin-top:5px;">血量: 4 | 技能: 掠夺<br>斩杀小怪并获得双倍金币</div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn-outline" style="margin-top:auto" onclick="UI.switch('screen-home')">返回</button>
+    </div>
+
+    <div id="screen-battle" class="screen hidden">
+        <div class="hud-top">
+            <div>❤️ <span id="hud-hp">5</span></div>
+            <div style="color:var(--gold)">💰 <span id="hud-gold">0</span></div>
+            <div style="color:#a1a1aa">FL <span id="hud-floor">1</span></div>
+        </div>
+
+        <div id="skill-btn" class="skill-btn" onclick="Game.useSkill()">
+            <span id="skill-name">技能准备中</span>
+            <div id="skill-mask" class="skill-cooldown"></div>
+        </div>
+
+        <div class="stage">
+            <div class="enemy-box" id="enemy-box">
+                <div id="enemy-icon" class="enemy-icon">👾</div>
+                <div style="margin-top:10px;">
+                    <span id="enemy-name" style="font-size:12px; color:#a1a1aa; background:#27272a; padding:4px 8px; border-radius:6px;">Lv.1 史莱姆</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="word-card">
+            <div class="word-text" id="q-word">Loading...</div>
+            <div style="position: absolute; right: 15px; top: 15px; opacity: 0.5; cursor: pointer;" onclick="AudioSys.speak(true)">🔊</div>
+            <div class="timer-track"><div id="time-bar" class="timer-fill"></div></div>
+        </div>
+
+        <div class="opt-grid" id="opt-container"></div>
+    </div>
+
+    <div id="screen-gacha" class="screen hidden">
+        <div class="hud-top">
+            <div style="color:var(--gold)">💰 <span id="gacha-gold">0</span></div>
+            <div onclick="Game.nextLevel()" style="cursor:pointer">➡️ 下一层</div>
+        </div>
+
+        <h2 style="text-align:center; color:#e4e4e7; margin:20px 0">深渊祭坛</h2>
+        
+        <div style="background:#27272a; padding:20px; border-radius:16px; border:1px solid #3f3f46; text-align:center;">
+            <p style="color:#a1a1aa; font-size:12px; margin-bottom:15px">召唤随从获得被动增益</p>
+            <button class="btn-gacha" onclick="GachaSys.pull()">🎲 100G 召唤</button>
+        </div>
+
+        <h3 style="font-size:14px; color:#71717a; margin-top:20px">队伍列表:</h3>
+        <div class="grid-4" id="pet-list"></div>
+    </div>
+
+    <div id="screen-talent" class="screen hidden">
+        <div class="hud-top">
+            <div style="color:var(--soul)">🟣 <span id="talent-soul">0</span></div>
+            <div onclick="UI.switch('screen-home')" style="cursor:pointer">❌</div>
+        </div>
+        <h2 style="text-align:center; margin-bottom:20px">灵魂回响</h2>
+        <div id="talent-list"></div>
+    </div>
+
+    <div id="modal-diff" class="modal">
+        <div class="modal-box">
+            <h2 style="margin-bottom:15px">选择难度</h2>
+            <button class="diff-btn" onclick="Game.startRun('easy')" style="border-color:#4ade80; color:#4ade80">
+                🟢 见习冒险家
+                <small>15秒思考 | 收益 x1.0</small>
+            </button>
+            <button class="diff-btn" onclick="Game.startRun('normal')" style="border-color:#eab308; color:#eab308">
+                🟡 荣耀勇者
+                <small>10秒思考 | 收益 x1.5</small>
+            </button>
+            <button class="diff-btn" onclick="Game.startRun('hard')" style="border-color:#f43f5e; color:#f43f5e">
+                🔴 深渊梦魇
+                <small>🔥5秒思考 | 收益 x3.0</small>
+            </button>
+            <button class="btn-outline" style="margin-top:10px" onclick="UI.closeModals()">取消</button>
+        </div>
+    </div>
+
+    <div id="modal-result" class="modal">
+        <div class="modal-box">
+            <h2 style="font-size:32px; margin-bottom:10px; color:#f43f5e">YOU DIED</h2>
+            <div id="res-content" style="color:#a1a1aa; margin:20px 0; line-height:1.6"></div>
+            <button class="btn-start" onclick="location.reload()">再来一局</button>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" hidden onchange="DictSys.handleFile(this)">
+</div>
+
+<script>
+/** 🔊 音频系统 (手机端修复版) */
+const AudioSys = {
+    ctx: null,
+    
+    // 初始化音频上下文 (需在用户交互时调用)
+    warmup() {
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+        // 播放静音解锁 AudioContext
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        g.gain.value = 0;
+        o.connect(g); g.connect(this.ctx.destination);
+        o.start(); o.stop(this.ctx.currentTime + 0.1);
+
+        // 播放静音解锁 SpeechSynthesis (关键!)
+        if(window.speechSynthesis) {
+            const u = new SpeechSynthesisUtterance('');
+            window.speechSynthesis.speak(u);
+        }
+    },
+
+    playTone(type, f, d, v=0.1) {
+        if (!this.ctx) return;
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.type = type; o.frequency.setValueAtTime(f, this.ctx.currentTime);
+        g.gain.setValueAtTime(v, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime+d);
+        o.connect(g); g.connect(this.ctx.destination);
+        o.start(); o.stop(this.ctx.currentTime+d);
+    },
+    atk() { this.playTone('square', 300, 0.1); },
+    crit() { this.playTone('sawtooth', 600, 0.2); setTimeout(()=>this.playTone('sawtooth',800,0.3), 50); },
+    hit() { this.playTone('sawtooth', 100, 0.3); },
+    coin() { this.playTone('sine', 1500, 0.1); },
+    skill() { this.playTone('sine', 800, 0.3); setTimeout(()=>this.playTone('square', 1200, 0.3), 100); },
+    
+    // 朗读逻辑 (真人优先 -> 系统降级)
+    speak(force = false) {
+        if(!Game.curWord) return;
+        
+        // 1. 尝试在线真人发音 (有道API)
+        // 注意：移动端 Audio 需要用户交互解锁，我们在 warmup 中解锁了
+        const audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${Game.curWord.en}&type=2`);
+        
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                // 2. 如果在线发音失败，降级使用手机 TTS
+                console.log("Audio play failed, fallback to TTS");
+                this.speakTTS();
+            });
+        }
+    },
+
+    speakTTS() {
+        if(!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(Game.curWord.en);
+        u.lang = 'en-US'; 
+        u.rate = 1.0; 
+        window.speechSynthesis.speak(u);
+    }
+};
+
+/** ⚔️ 游戏核心 */
+const Game = {
+    state: { job:'warrior', hp:0, maxHp:0, gold:0, floor:1, combo:0, diff:'normal', skillCd:0 },
+    diffConfig: {
+        easy:   { time:15, multi:1.0, name:'见习' },
+        normal: { time:10, multi:1.5, name:'勇者' },
+        hard:   { time: 5, multi:3.0, name:'梦魇' }
+    },
+    jobs: {
+        warrior: { name:'血怒', desc:'下击必暴击回血', cd:6, hp:5 },
+        mage:    { name:'凝滞', desc:'暂停时间5秒', cd:5, hp:3 },
+        rogue:   { name:'掠夺', desc:'斩杀获双倍金币', cd:4, hp:4 }
+    },
+    battle: { timer:null, maxTime:10, curTime:10, enemyHp:1, maxEnemyHp:1, elite:false, skillActive:false },
+    curWord: null,
+
+    init() {
+        DictSys.init();
+        TalentSys.init();
+        document.getElementById('home-soul').innerText = TalentSys.soul;
+        
+        // 绑定首次点击，预热音频引擎
+        document.addEventListener('click', () => {
+            AudioSys.warmup();
+        }, { once: true });
+    },
+
+    selectJob(job) {
+        AudioSys.warmup(); // 再次确保预热
+        this.state.job = job;
+        document.querySelectorAll('.job-card').forEach(el => el.classList.remove('selected'));
+        document.getElementById('job-'+job).classList.add('selected');
+        setTimeout(() => UI.showDiffModal(), 200);
+    },
+
+    startRun(diff) {
+        if(DictSys.list.length < 5) return alert("请先导入词库！");
+        this.state.diff = diff;
+        
+        const jobBase = this.jobs[this.state.job].hp;
+        this.state.maxHp = jobBase + TalentSys.get('hp');
+        this.state.hp = this.state.maxHp;
+        this.state.gold = 0;
+        this.state.floor = 1;
+        this.state.combo = 0;
+        this.state.skillCd = 0;
+        GachaSys.reset();
+        
+        UI.closeModals();
+        UI.switch('screen-battle');
+        this.updateSkillBtn();
+        this.startFloor();
+    },
+
+    startFloor() {
+        this.battle.elite = (this.state.floor % 5 === 0);
+        let baseHp = 2 + Math.floor(this.state.floor / 2);
+        if(this.battle.elite) baseHp *= 3; 
+
+        this.battle.maxEnemyHp = baseHp;
+        this.battle.enemyHp = baseHp;
+        this.battle.maxTime = this.diffConfig[this.state.diff].time + TalentSys.get('time');
+        
+        if(this.state.skillCd > 0) this.state.skillCd--;
+        this.updateSkillBtn();
+
+        UI.updateHUD();
+        UI.updateEnemy();
+        this.nextQ();
+    },
+
+    nextQ() {
+        if(this.battle.enemyHp <= 0) return this.win();
+
+        const list = DictSys.list;
+        this.curWord = list[Math.floor(Math.random()*list.length)];
+        const opts = new Set([this.curWord.zh]);
+        while(opts.size < 4) opts.add(list[Math.floor(Math.random()*list.length)].zh);
+        
+        document.getElementById('q-word').innerText = this.curWord.en;
+        
+        // 延迟一点播放，防止换页卡顿
+        setTimeout(() => AudioSys.speak(), 100);
+        
+        const box = document.getElementById('opt-container');
+        box.innerHTML = '';
+        Array.from(opts).sort(()=>Math.random()-0.5).forEach(opt => {
+            const btn = document.createElement('div');
+            btn.className = 'opt-btn';
+            btn.innerText = opt;
+            btn.onclick = () => this.check(opt, btn);
+            box.appendChild(btn);
+        });
+
+        this.startTimer();
+    },
+
+    startTimer() {
+        clearInterval(this.battle.timer);
+        this.battle.curTime = this.battle.maxTime;
+        const bar = document.getElementById('time-bar');
+        
+        this.battle.timer = setInterval(() => {
+            if(this.battle.skillActive && this.state.job === 'mage') return; 
+
+            this.battle.curTime -= 0.1;
+            bar.style.width = (this.battle.curTime / this.battle.maxTime)*100 + '%';
+            if(this.battle.curTime <= 0) {
+                this.takeDmg();
+                this.nextQ();
+            }
+        }, 100);
+    },
+
+    useSkill() {
+        if(this.state.skillCd > 0) return;
+        const j = this.state.job;
+        this.state.skillCd = this.jobs[j].cd;
+        this.updateSkillBtn();
+        AudioSys.skill();
+
+        if(j === 'warrior') {
+            this.battle.skillActive = true; 
+            UI.floatText("血怒开启!", "#ef4444");
+        } else if(j === 'mage') {
+            this.battle.skillActive = true; 
+            UI.floatText("时间凝滞!", "#06b6d4");
+            setTimeout(() => { this.battle.skillActive = false; }, 5000);
+        } else if(j === 'rogue') {
+            if(!this.battle.elite) {
+                this.battle.enemyHp = 0; 
+                this.state.gold += 20; 
+                UI.floatText("斩杀掠夺!", "#eab308");
+                this.nextQ();
+            } else {
+                this.battle.enemyHp = Math.max(0, this.battle.enemyHp - 5); 
+                UI.floatText("致命重创!", "#f43f5e");
+                UI.updateEnemy();
+            }
+        }
+    },
+
+    updateSkillBtn() {
+        const btn = document.getElementById('skill-btn');
+        const mask = document.getElementById('skill-mask');
+        const info = this.jobs[this.state.job];
+        
+        document.getElementById('skill-name').innerText = `${info.name} (CD:${info.cd})`;
+        
+        if(this.state.skillCd > 0) {
+            btn.classList.remove('ready');
+            mask.classList.remove('hidden');
+            mask.innerText = this.state.skillCd;
+        } else {
+            btn.classList.add('ready');
+            mask.classList.add('hidden');
+        }
+    },
+
+    check(sel, btn) {
+        clearInterval(this.battle.timer);
+        if(sel === this.curWord.zh) {
+            btn.classList.add('correct');
+            this.state.combo++;
+            
+            let dmg = 1;
+            let isCrit = Math.random() < (0.05 + this.state.combo * 0.02);
+            if(this.state.job === 'warrior' && this.battle.skillActive) {
+                isCrit = true;
+                if(this.state.hp < this.state.maxHp) this.state.hp++; 
+                this.battle.skillActive = false;
+            }
+
+            if(isCrit) {
+                dmg = 2;
+                AudioSys.crit();
+                UI.floatText("CRITICAL!", "var(--crit)");
+            } else {
+                AudioSys.atk();
+            }
+
+            this.battle.enemyHp -= dmg;
+            UI.updateEnemy();
+            
+            if(this.battle.enemyHp <= 0 && GachaSys.has('bat') && this.state.hp < this.state.maxHp) {
+                this.state.hp++; 
+            }
+            
+            if(this.state.skillCd > 0) this.state.skillCd--;
+            this.updateSkillBtn();
+
+            setTimeout(() => this.nextQ(), 400);
+        } else {
+            btn.classList.add('wrong');
+            this.state.combo = 0;
+            this.takeDmg();
+            document.querySelectorAll('.opt-btn').forEach(b=>{
+                if(b.innerText===this.curWord.zh) b.classList.add('correct');
+            });
+            setTimeout(() => this.nextQ(), 1200);
+        }
+        UI.updateHUD();
+    },
+
+    takeDmg() {
+        if(GachaSys.has('dog') && Math.random() < 0.2) return UI.floatText("格挡!", "#fff");
+        this.state.hp--;
+        AudioSys.hit();
+        document.body.animate([{transform:'translate(0)'},{transform:'translate(-10px)'},{transform:'translate(10px)'},{transform:'translate(0)'}], {duration:300});
+        if(this.state.hp <= 0) this.over();
+    },
+
+    win() {
+        clearInterval(this.battle.timer);
+        let baseGold = this.battle.elite ? 50 : (10 + Math.floor(Math.random()*10));
+        let multi = this.diffConfig[this.state.diff].multi;
+        if(GachaSys.has('cat')) multi += 0.5;
+        
+        let finalGold = Math.floor(baseGold * multi * (1 + TalentSys.get('gold')*0.2));
+        this.state.gold += finalGold;
+        AudioSys.coin();
+
+        UI.updateHUD();
+        GachaSys.render();
+        UI.switch('screen-gacha');
+    },
+
+    nextLevel() {
+        this.state.floor++;
+        UI.switch('screen-battle');
+        this.startFloor();
+    },
+
+    over() {
+        clearInterval(this.battle.timer);
+        let soul = Math.floor(this.state.floor * 10 * this.diffConfig[this.state.diff].multi);
+        TalentSys.addSoul(soul);
+        
+        document.getElementById('res-content').innerHTML = `
+            <p>职业: ${this.jobs[this.state.job].name}</p>
+            <p>止步层数: <b style="color:#f43f5e">${this.state.floor}</b></p>
+            <p>获得灵魂: <b style="color:var(--soul)">+${soul}</b></p>
+        `;
+        document.getElementById('modal-result').classList.add('show');
+    }
+};
+
+/** 🎰 抽卡系统 */
+const GachaSys = {
+    pool: [
+        {id:'dog', name:'忠犬', desc:'20%概率格挡', icon:'🐶', rare:'N'},
+        {id:'bat', name:'吸血蝠', desc:'杀怪回1血', icon:'🦇', rare:'R'},
+        {id:'cat', name:'招财猫', desc:'金币+50%', icon:'🐱', rare:'SR'},
+        {id:'dragon', name:'红龙', desc:'思考时间+3秒', icon:'🐲', rare:'SSR'}
+    ],
+    pets: [],
+    reset() { this.pets = []; },
+    has(id) { return this.pets.find(p=>p.id===id); },
+    pull() {
+        if(Game.state.gold < 100) return alert("金币不足!");
+        Game.state.gold -= 100;
+        const r = Math.random();
+        let p = (r<0.6) ? this.pool[0] : (r<0.85 ? this.pool[1] : (r<0.98 ? this.pool[2] : this.pool[3]));
+        this.pets.push(p);
+        this.render();
+        UI.updateHUD();
+        if(p.id === 'dragon') Game.battle.maxTime += 3;
+    },
+    render() {
+        const d = document.getElementById('pet-list');
+        d.innerHTML = '';
+        this.pets.forEach(p => {
+            const el = document.createElement('div');
+            el.className = `item-box ${p.rare==='SSR'?'ssr':''}`;
+            el.innerHTML = `<div style="font-size:24px">${p.icon}</div><div>${p.name}</div>`;
+            d.appendChild(el);
+        });
+        document.getElementById('gacha-gold').innerText = Game.state.gold;
+    }
+};
+
+/** 🔮 天赋系统 */
+const TalentSys = {
+    data: { hp:0, gold:0, time:0 },
+    soul: 0,
+    init() {
+        const s = JSON.parse(localStorage.getItem('abyss_save')||'{}');
+        this.data = s.data || {hp:0, gold:0, time:0};
+        this.soul = s.soul || 0;
+    },
+    save() { localStorage.setItem('abyss_save', JSON.stringify({data:this.data, soul:this.soul})); },
+    get(k) { return this.data[k]||0; },
+    addSoul(n) { this.soul += n; this.save(); },
+    open() {
+        document.getElementById('talent-soul').innerText = this.soul;
+        const list = document.getElementById('talent-list');
+        list.innerHTML = '';
+        const conf = [
+            {k:'hp', n:'强壮', d:'生命+1', c:50},
+            {k:'gold', n:'贪婪', d:'金币+20%', c:100},
+            {k:'time', n:'专注', d:'时间+1秒', c:80}
+        ];
+        conf.forEach(t => {
+            const lv = this.data[t.k];
+            const div = document.createElement('div');
+            div.className = "talent-row";
+            div.innerHTML = `
+                <div><div style="font-weight:bold">${t.n} Lv.${lv}</div><div style="font-size:12px;color:#a1a1aa">${t.d}</div></div>
+                <button style="width:auto; padding:6px 12px; font-size:12px; background:#8b5cf6;" onclick="TalentSys.up('${t.k}',${t.c})">${t.c}魂 升级</button>
+            `;
+            list.appendChild(div);
+        });
+        UI.switch('screen-talent');
+    },
+    up(k, cost) {
+        if(this.soul >= cost) {
+            this.soul -= cost;
+            this.data[k]++;
+            this.save();
+            this.open();
+        } else alert("灵魂不足");
+    }
+};
+
+/** 📚 词库系统 */
+const DictSys = {
+    list: [],
+    init() {
+        const raw = "abandon|放弃;ability|能力;absolute|绝对的;academic|学术的;accelerate|加速;accent|口音;access|入口;accident|事故;account|账户;achieve|实现";
+        this.parse(raw);
+        const saved = localStorage.getItem('abyss_dict');
+        if(saved) this.list = JSON.parse(saved);
+    },
+    parse(str) {
+        this.list = str.split(';').map(s=>{const p=s.split('|');return{en:p[0],zh:p[1]}}).filter(w=>w.en);
+    },
+    open() { document.getElementById('file-input').click(); },
+    handleFile(inp) {
+        const f = inp.files[0];
+        const r = new FileReader();
+        r.onload = e => {
+            const arr = [];
+            e.target.result.split(/\r?\n/).forEach(l => {
+                const p = l.trim().split(/,|，|\s+/);
+                if(p.length>=2) arr.push({en:p[0], zh:p[1]});
+            });
+            if(arr.length>0) {
+                this.list = arr;
+                localStorage.setItem('abyss_dict', JSON.stringify(arr));
+                alert(`导入 ${arr.length} 词成功!`);
+            }
+        };
+        r.readAsText(f);
+    }
+};
+
+/** 🖥️ UI 管理 */
+const UI = {
+    switch(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    },
+    showDiffModal() { document.getElementById('modal-diff').classList.add('show'); },
+    closeModals() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('show')); },
+    updateHUD() {
+        document.getElementById('hud-hp').innerText = Game.state.hp;
+        document.getElementById('hud-gold').innerText = Game.state.gold;
+        document.getElementById('hud-floor').innerText = Game.state.floor;
+    },
+    updateEnemy() {
+        const box = document.getElementById('enemy-box');
+        if(Game.battle.elite) {
+            box.classList.add('elite-glow');
+            document.getElementById('enemy-name').innerText = "⚠️ 精英怪物 ⚠️";
+            document.getElementById('enemy-name').style.color = "#fb7185";
+        } else {
+            box.classList.remove('elite-glow');
+            document.getElementById('enemy-name').innerText = `Lv.${Game.state.floor} 怪物`;
+            document.getElementById('enemy-name').style.color = "#a1a1aa";
+        }
+    },
+    floatText(txt, color) {
+        const el = document.createElement('div');
+        el.className = 'dmg-num';
+        el.innerText = txt;
+        el.style.color = color || '#fff';
+        el.style.left = (50 + (Math.random()-0.5)*20) + '%'; 
+        el.style.top = '40%';
+        document.querySelector('.stage').appendChild(el);
+        setTimeout(() => el.remove(), 600);
+    }
+};
+
+window.onload = () => Game.init();
+</script>
+</body>
+</html>
