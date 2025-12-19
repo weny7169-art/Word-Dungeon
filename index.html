@@ -274,50 +274,73 @@
 </div>
 
 <script>
-/** 🔊 音频系统 */
+/** 🔊 音频系统 (修复手机端兼容性) */
 const AudioSys = {
     ctx: null,
+    
+    // 强力预热：必须在用户第一次交互（点击或触摸）时立即调用
     warmup() {
         if (!this.ctx) {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         }
+        
+        // 1. 恢复上下文
         if (this.ctx.state === 'suspended') {
             this.ctx.resume();
         }
+        
+        // 2. 播放静音振荡器 (解锁 AudioContext 音效)
         const o = this.ctx.createOscillator();
         const g = this.ctx.createGain();
-        g.gain.value = 0;
-        o.connect(g); g.connect(this.ctx.destination);
-        o.start(); o.stop(this.ctx.currentTime + 0.1);
+        g.gain.value = 0; // 静音
+        o.connect(g); 
+        g.connect(this.ctx.destination);
+        o.start(); 
+        o.stop(this.ctx.currentTime + 0.1);
+
+        // 3. 播放静音语音 (解锁 SpeechSynthesis) - 修复 iOS 语音问题
         if(window.speechSynthesis) {
+            window.speechSynthesis.cancel(); // 先清除可能卡住的队列
             const u = new SpeechSynthesisUtterance('');
+            u.volume = 0;
             window.speechSynthesis.speak(u);
         }
     },
+
     playTone(type, f, d, v=0.1) {
         if (!this.ctx) return;
         const o = this.ctx.createOscillator(), g = this.ctx.createGain();
-        o.type = type; o.frequency.setValueAtTime(f, this.ctx.currentTime);
+        o.type = type; 
+        o.frequency.setValueAtTime(f, this.ctx.currentTime);
         g.gain.setValueAtTime(v, this.ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime+d);
+        g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + d);
         o.connect(g); g.connect(this.ctx.destination);
-        o.start(); o.stop(this.ctx.currentTime+d);
+        o.start(); o.stop(this.ctx.currentTime + d);
     },
+    
+    // 各种音效预设
     atk() { this.playTone('square', 300, 0.1); },
     crit() { this.playTone('sawtooth', 600, 0.2); setTimeout(()=>this.playTone('sawtooth',800,0.3), 50); },
     hit() { this.playTone('sawtooth', 100, 0.3); },
     coin() { this.playTone('sine', 1500, 0.1); },
     skill() { this.playTone('sine', 800, 0.3); setTimeout(()=>this.playTone('square', 1200, 0.3), 100); },
+    
+    // 朗读
     speak(force = false) {
         if(!Game.curWord) return;
+        
+        // 尝试在线发音
         const audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${Game.curWord.en}&type=2`);
         const playPromise = audio.play();
+        
         if (playPromise !== undefined) {
             playPromise.catch(error => {
+                // 失败则降级使用 TTS
                 this.speakTTS();
             });
         }
     },
+    
     speakTTS() {
         if(!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
@@ -349,12 +372,21 @@ const Game = {
         DictSys.init();
         TalentSys.init();
         document.getElementById('home-soul').innerText = TalentSys.soul;
-        document.addEventListener('click', () => {
+        
+        // 🔊 修复音效：添加 touchstart 监听器，确保在移动端首次触摸时解锁音频上下文
+        const unlockAudio = () => {
             AudioSys.warmup();
-        }, { once: true });
+            // 解锁一次后移除监听，节省资源
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('touchstart', unlockAudio);
+        };
+        
+        document.addEventListener('click', unlockAudio);
+        document.addEventListener('touchstart', unlockAudio);
     },
 
     selectJob(job) {
+        // 在开始冒险时也可以再次尝试解锁，双重保险
         AudioSys.warmup();
         this.state.job = job;
         document.querySelectorAll('.job-card').forEach(el => el.classList.remove('selected'));
@@ -674,7 +706,7 @@ const TalentSys = {
 const DictSys = {
     list: [],
     mistakes: [],
-    sourceName: "未加载", // 当前词库来源名称
+    sourceName: "未加载", 
     
     // 内置词库 (模拟GitHub远程库)
     builtInRaw: "abandon|放弃;absolute|绝对的;academic|学术的;accelerate|加速;accent|口音;access|入口;accommodate|容纳;accumulate|积累;acknowledge|承认;acquire|获得;adapt|适应;addict|上瘾;adequate|足够的;adjust|调整;admire|钦佩;admit|承认;adopt|收养;adult|成年人;advance|前进;adventure|冒险;advocate|提倡;affect|影响;affection|喜爱;agency|代理处;agent|代理人;aggressive|侵略的;agony|痛苦;agriculture|农业;aid|援助;alarm|警报;alien|外星人;allowance|津贴;alongside|在旁边;alter|改变;alternative|替代物;amaze|使吃惊;ambition|野心;ambulance|救护车;amount|数量;amuse|娱乐;analyze|分析;ancestor|祖先;anchor|锚;ancient|古代的;anger|愤怒;angle|角度;anniversary|周年纪念;announce|宣布;annoy|使烦恼;annual|每年的",
@@ -687,7 +719,6 @@ const DictSys = {
             this.list = JSON.parse(saved);
             this.sourceName = savedName;
         } else {
-            // 默认加载内置
             this.loadBuiltIn(true);
         }
 
@@ -696,12 +727,10 @@ const DictSys = {
         this.updateBadge();
     },
     
-    // 打开来源选择框
     openSourceModal() {
         document.getElementById('modal-source').classList.add('show');
     },
 
-    // 加载内置词库
     loadBuiltIn(silent = false) {
         this.parse(this.builtInRaw);
         this.sourceName = "内置词库 (GitHub)";
@@ -739,10 +768,9 @@ const DictSys = {
             }
         };
         r.readAsText(f);
-        inp.value = ''; // 重置input
+        inp.value = ''; 
     },
 
-    // 📖 查看词库 (新功能)
     openViewer() {
         UI.switch('screen-dict-view');
         const con = document.getElementById('dict-view-container');
@@ -755,7 +783,6 @@ const DictSys = {
             return;
         }
 
-        // 仅渲染前200个防止卡顿，或者简单渲染全部
         this.list.forEach((w, i) => {
             const item = document.createElement('div');
             item.className = 'list-item';
